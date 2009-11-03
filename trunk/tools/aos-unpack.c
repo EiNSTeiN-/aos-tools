@@ -58,6 +58,10 @@ int parse_flash_partition(uint8_t *data, unsigned int length, const char *partit
 			printf("Detected cpio magic on file %s, (init or recovery cpios)\n", filepath);
 			break;
 		}
+		case AOS_CPIO_MAGIC: {
+			printf("Detected gzip magic on file %s, (boot logo)\n", filepath);
+			break;
+		}
 		default: {
 			if(offset == 0x3f8000 || offset == 0x060000 || offset == 0x000000)
 				// We know those are never signed, so we don't warn about them
@@ -98,6 +102,10 @@ int parse_flash_partition(uint8_t *data, unsigned int length, const char *partit
 		log_write("unpack.sh", "(cd unpacked/%s/ && cpio -idm < %s)\n", cpio_name, cpio_name);
 		log_write("unpack.sh", "rm unpacked/%s/%s\n", cpio_name, cpio_name);
 		log_write("unpack.sh", "\n");
+	}
+	else if(flash->header->magic == AOS_GZIP_MAGIC) {
+		log_write("unpack.sh", "## .gz: %s\n", filepath);
+		
 	}
 	
 	return 1;
