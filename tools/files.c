@@ -14,7 +14,7 @@
 
 #include "files.h"
 
-uint8_t *file_load(char *filename, unsigned int *size)
+uint8_t *file_load(const char *filename, unsigned int *size)
 {
 	FILE *file;
 	long filesize, readsize;
