@@ -58,7 +58,7 @@ int parse_flash_partition(uint8_t *data, unsigned int length, const char *partit
 			printf("Detected cpio magic on file %s, (init or recovery cpios)\n", filepath);
 			break;
 		}
-		case AOS_CPIO_MAGIC: {
+		case AOS_GZIP_MAGIC: {
 			printf("Detected gzip magic on file %s, (boot logo)\n", filepath);
 			break;
 		}
@@ -104,8 +104,11 @@ int parse_flash_partition(uint8_t *data, unsigned int length, const char *partit
 		log_write("unpack.sh", "\n");
 	}
 	else if(flash->header->magic == AOS_GZIP_MAGIC) {
-		log_write("unpack.sh", "## .gz: %s\n", filepath);
+		const char *gz_name = (const char *)&data[10];
 		
+		log_write("unpack.sh", "## .gz: %s\n", filepath);
+		log_write("unpack.sh", "cp %s unpacked/%s.gz\n", filepath, gz_name);
+		log_write("unpack.sh", "gunzip -d unpacked/%s.gz\n", gz_name);
 	}
 	
 	return 1;

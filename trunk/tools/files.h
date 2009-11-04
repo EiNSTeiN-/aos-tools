@@ -9,7 +9,7 @@
 #ifndef __FILES_H
 #define __FILES_H
 
-uint8_t *file_load(char *filename, unsigned int *size);
+uint8_t *file_load(const char *filename, unsigned int *size);
 int file_write(const char *filename, const char *buffer, unsigned int length);
 
 char *bprintf(const char *fmt, ...);
