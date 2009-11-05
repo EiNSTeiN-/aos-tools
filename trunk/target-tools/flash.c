@@ -82,15 +82,13 @@ int dump(const char *filename, const char *address, const char *size)
 		return 0;
 	}
 	
-	printf("Dumping %u bytes at 0x%08x\n", _size, _address);
+	printf("Dumping %u bytes from address 0x%08x\n", _size, _address);
 	
 	data = malloc(_size);
 	if(data == NULL) {
 		printf("error: memory: %u\n", _size);
 		return 0;
 	}
-	
-	printf("Initializing flashrw module...\n");
 	
 	fd = FLASH_Init();
 	if(fd < 0) {
@@ -101,8 +99,6 @@ int dump(const char *filename, const char *address, const char *size)
 	p.address = _address;
 	p.size = _size;
 	p.data = data;
-	
-	printf("Reading...\n");
 	
 	if(FLASH_Read(fd, &p) != 0) {
 		printf("error: flash read failed.\n");
@@ -147,10 +143,20 @@ int main(int argc, char *argv[])
 	}
 	
 	switch(argv[1][1]) {
-		case 'f': flash(argv[2], argv[3]);
-		case 'd': dump(argv[2], argv[3], argc > 4 ? argv[4] : NULL);
+		case 'f': {
+			flash(argv[2], argv[3]);
+			break;
+		}
+		case 'd': {
+			dump(argv[2], argv[3], argc > 4 ? argv[4] : NULL);
+			break;
+		}
 		default: return 1;
 	}
+	
+	
+	printf("\n");
+	printf("Done.\n");
 	
 	return 0;
 }
