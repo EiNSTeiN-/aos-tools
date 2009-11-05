@@ -3,8 +3,9 @@ AOS_INFO_OBJECTS=aos-info.o files.o mpk.o
 AOS_EXTRACT_OBJECTS=aos-extract.o files.o mpk.o
 AOS_UNPACK_OBJECTS=aos-unpack.o files.o mpk.o
 AOS_FLASH_OBJECTS=aos-flash.o files.o mpk.o
+AOS_RESIZE_OBJECTS=aos-resize.o files.o mpk.o
 
-all: aos-info aos-extract aos-unpack aos-flash
+all: aos-info aos-extract aos-unpack aos-flash aos-resize
 
 .c.o:
 	gcc -c $*.c
@@ -20,12 +21,16 @@ aos-unpack: $(AOS_UNPACK_OBJECTS)
 
 aos-flash: $(AOS_FLASH_OBJECTS)
 	gcc -o aos-flash $(AOS_FLASH_OBJECTS) -L../libaos -laos -lcrypto
-	
+
+aos-resize: $(AOS_RESIZE_OBJECTS)
+	gcc -o aos-resize $(AOS_RESIZE_OBJECTS) -L../libaos -laos -lcrypto
+
 install:
 	cp aos-info /usr/bin/
 	cp aos-extract /usr/bin/
 	cp aos-unpack /usr/bin/
 	cp aos-flash /usr/bin/
+	cp aos-resize /usr/bin/
 
 clean:
-	rm -f aos-info aos-extract aos-unpack aos-flash *.o
+	rm -f aos-info aos-extract aos-unpack aos-flash aos-resize *.o
