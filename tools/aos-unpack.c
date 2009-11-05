@@ -101,16 +101,16 @@ int parse_flash_partition(uint8_t *data, unsigned int length, const char *partit
 		log_write("unpack.sh", "mkdir -p unpacked/%s/\n", cpio_name);
 		log_write("unpack.sh", "aos-flash %s -x unpacked/%s/%s.gz\n", filepath, cpio_name, cpio_name);
 		log_write("unpack.sh", "gunzip -d unpacked/%s/%s.gz\n", cpio_name, cpio_name);
-		log_write("unpack.sh", "(cd unpacked/%s/ && cpio -idm < %s)\n", cpio_name, cpio_name);
+		log_write("unpack.sh", "(cd unpacked/%s/ && cpio -i -d -H newc -F %s --no-absolute-filenames)\n", cpio_name, cpio_name);
 		log_write("unpack.sh", "rm unpacked/%s/%s\n", cpio_name, cpio_name);
 		log_write("unpack.sh", "\n");
 		
 		// Repack script
 		log_write("repack.sh", "## .cpio.gz: %s\n", filepath);
-		log_write("repack.sh", "(cd unpacked/%s/ && find . -depth | cpio -oc --owner=root:root --no-absolute-filenames -F ../%s.tmp)\n", cpio_name, cpio_name);
+		log_write("repack.sh", "(cd unpacked/%s/ && find . | cpio -o -H newc -F ../%s.tmp)\n", cpio_name, cpio_name);
 		log_write("repack.sh", "rm -f -r unpacked/%s\n", cpio_name);
 		log_write("repack.sh", "mv unpacked/%s.tmp  unpacked/%s\n", cpio_name, cpio_name);
-		log_write("repack.sh", "gzip -N unpacked/%s\n", cpio_name, cpio_name);
+		log_write("repack.sh", "gzip -N --best unpacked/%s\n", cpio_name, cpio_name);
 		log_write("repack.sh", "aos-flash %s -i unpacked/%s.gz\n", filepath, cpio_name);
 		log_write("repack.sh", "rm -f unpacked/%s.gz\n", cpio_name);
 		log_write("repack.sh", "\n");
@@ -126,7 +126,7 @@ int parse_flash_partition(uint8_t *data, unsigned int length, const char *partit
 		log_write("unpack.sh", "\n");
 		
 		log_write("repack.sh", "## .gz: %s\n", filepath);
-		log_write("repack.sh", "gzip unpacked/%s\n", gz_name);
+		log_write("repack.sh", "gzip -N --best unpacked/%s\n", gz_name);
 		log_write("repack.sh", "cp unpacked/%s.gz %s\n", gz_name, filepath);
 		log_write("repack.sh", "rm -f unpacked/%s.gz\n", gz_name);
 		log_write("repack.sh", "\n");

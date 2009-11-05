@@ -87,6 +87,7 @@ int flash_insert_cpio(struct flash_file *file, const char *input, const char *ou
 	
 	// Set the new file size
 	((struct flash_header *)newdata)->filesize = newlength;
+	((struct flash_header *)newdata)->cpio_size = length;
 	
 	mkdir_recursive(output);
 	file_write(output, newdata, newlength);

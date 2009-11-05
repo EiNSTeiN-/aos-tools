@@ -135,7 +135,8 @@ struct flash_header {
 	uint32_t filesize; // size of the file
 	uint32_t entrypoint; // address of the file's entry point
 	uint32_t cpio; // offset to the .cpio.gz file
-	uint32_t unk_98[26];
+	uint32_t cpio_size; // size of the .cpio.gz file
+	uint32_t unk_9C[22];
 	uint8_t data[];
 } __attribute__((packed));
 
