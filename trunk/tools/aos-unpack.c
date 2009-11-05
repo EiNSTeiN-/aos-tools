@@ -41,7 +41,6 @@ int parse_flash_partition(uint8_t *data, unsigned int length, const char *partit
 {
 	struct flash_file *flash;
 	int device;
-	char name[2048];
 	
 	flash = flash_create(data, length);
 	if(!flash) {
@@ -63,7 +62,7 @@ int parse_flash_partition(uint8_t *data, unsigned int length, const char *partit
 			break;
 		}
 		default: {
-			if(offset == 0x3f8000 || offset == 0x060000 || offset == 0x000000)
+			if(offset == 0x3f8000 || offset == 0x000000)
 				// We know those are never signed, so we don't warn about them
 				return 0;
 			
@@ -72,12 +71,14 @@ int parse_flash_partition(uint8_t *data, unsigned int length, const char *partit
 		}
 	}
 	
-	if(!flash_detect_key(flash, Bootloader_Keys, MPK_KNOWN_DEVICES, &device)) {
-		printf("error: Could not verify signature on file %s\n", filepath);
-		return 0;
+	if(flash->header->magic != AOS_GZIP_MAGIC) {
+		if(!flash_detect_key(flash, Bootloader_Keys, MPK_KNOWN_DEVICES, &device)) {
+			printf("error: Could not verify signature on file %s\n", filepath);
+			return 0;
+		}
+		else
+			printf("Verified signature on file %s, detected device type %s\n", filepath, mpk_device_type(device));
 	}
-	
-	printf("Verified signature on file %s, detected device type %s\n", filepath, mpk_device_type(device));
 	
 	if(flash->header->magic == AOS_CPIO_MAGIC) {
 		unsigned int gz_length;
@@ -94,6 +95,7 @@ int parse_flash_partition(uint8_t *data, unsigned int length, const char *partit
 		
 		cpio_name = (const char *)&gz_data[10];
 		
+		// Unpack script
 		log_write("unpack.sh", "## .cpio.gz: %s\n", filepath);
 		log_write("unpack.sh", "rm -f -r unpacked/%s\n", cpio_name);
 		log_write("unpack.sh", "mkdir -p unpacked/%s/\n", cpio_name);
@@ -102,13 +104,32 @@ int parse_flash_partition(uint8_t *data, unsigned int length, const char *partit
 		log_write("unpack.sh", "(cd unpacked/%s/ && cpio -idm < %s)\n", cpio_name, cpio_name);
 		log_write("unpack.sh", "rm unpacked/%s/%s\n", cpio_name, cpio_name);
 		log_write("unpack.sh", "\n");
+		
+		// Repack script
+		log_write("repack.sh", "## .cpio.gz: %s\n", filepath);
+		log_write("repack.sh", "(cd unpacked/%s/ && find . -depth | cpio -oc --owner=root:root --no-absolute-filenames -F ../%s.tmp)\n", cpio_name, cpio_name);
+		log_write("repack.sh", "rm -f -r unpacked/%s\n", cpio_name);
+		log_write("repack.sh", "mv unpacked/%s.tmp  unpacked/%s\n", cpio_name, cpio_name);
+		log_write("repack.sh", "gzip -N unpacked/%s\n", cpio_name, cpio_name);
+		log_write("repack.sh", "aos-flash %s -i unpacked/%s.gz\n", filepath, cpio_name);
+		log_write("repack.sh", "rm -f unpacked/%s.gz\n", cpio_name);
+		log_write("repack.sh", "\n");
 	}
 	else if(flash->header->magic == AOS_GZIP_MAGIC) {
 		const char *gz_name = (const char *)&data[10];
 		
 		log_write("unpack.sh", "## .gz: %s\n", filepath);
+		log_write("unpack.sh", "mkdir -p unpacked/\n", gz_name);
+		log_write("unpack.sh", "rm -f unpacked/%s\n", gz_name);
 		log_write("unpack.sh", "cp %s unpacked/%s.gz\n", filepath, gz_name);
 		log_write("unpack.sh", "gunzip -d unpacked/%s.gz\n", gz_name);
+		log_write("unpack.sh", "\n");
+		
+		log_write("repack.sh", "## .gz: %s\n", filepath);
+		log_write("repack.sh", "gzip unpacked/%s\n", gz_name);
+		log_write("repack.sh", "cp unpacked/%s.gz %s\n", gz_name, filepath);
+		log_write("repack.sh", "rm -f unpacked/%s.gz\n", gz_name);
+		log_write("repack.sh", "\n");
 	}
 	
 	return 1;
@@ -167,6 +188,7 @@ int parse_cramfs_archive(const char *filename, uint8_t *data, unsigned int lengt
 {
 	struct flash_file *flash;
 	int device;
+	char cramfs_name[2048];
 	
 	flash = flash_create(data, length);
 	if(!flash) {
@@ -186,17 +208,38 @@ int parse_cramfs_archive(const char *filename, uint8_t *data, unsigned int lengt
 	
 	printf("Verified signature on file %s, detected device type %s\n", filename, mpk_device_type(device));
 	
+	strcpy(cramfs_name, filename);
+	cramfs_name[strlen(cramfs_name)-strlen(".secure")] = 0;
+	
 	log_write("unpack.sh", "## .cramfs.secure: %s\n", filepath);
-	log_write("unpack.sh", "rm -f -r unpacked/%s\n", filename);
+	log_write("unpack.sh", "rm -f -r unpacked/%s\n", cramfs_name);
 	log_write("unpack.sh", "mkdir -p unpacked\n");
 	if(*(uint32_t *)&flash->header->data[0] == 0x28cd3d45 /* CRAMFS_MAGIC */) {
-		log_write("unpack.sh", "dd if=%s of=unpacked/%s.stripped bs=256 skip=1\n", filepath, filename);
-		log_write("unpack.sh", "(cd unpacked/ && cramfsck -v -x %s %s.stripped)\n", filename, filename);
-		log_write("unpack.sh", "rm unpacked/%s.stripped\n", filename);
+		log_write("unpack.sh", "dd if=%s of=unpacked/%s.stripped bs=256 skip=1\n", filepath, cramfs_name);
+		log_write("unpack.sh", "(cd unpacked/ && cramfsck -v -x %s %s.stripped)\n", cramfs_name, cramfs_name);
+		log_write("unpack.sh", "rm unpacked/%s.stripped\n", cramfs_name);
 	} else {
-		log_write("unpack.sh", "cramfsck -x unpacked/%s %s\n", filename, filepath);
+		log_write("unpack.sh", "cramfsck -x unpacked/%s %s\n", cramfs_name, filepath);
 	}
 	log_write("unpack.sh", "\n");
+	
+	log_write("repack.sh", "## .cramfs.secure: %s\n", filepath);
+	if(*(uint32_t *)&flash->header->data[0] == 0x28cd3d45 /* CRAMFS_MAGIC */) {
+		log_write("repack.sh", "mkcramfs unpacked/%s unpacked/%s.tmp\n", cramfs_name, cramfs_name);
+		log_write("repack.sh", "rm -f -r unpacked/%s\n", cramfs_name);
+		log_write("repack.sh", "dd if=%s of=unpacked/%s.secure bs=256 count=1\n", filepath, cramfs_name);
+		log_write("repack.sh", "dd if=unpacked/%s.tmp of=unpacked/%s.secure bs=256 seek=1\n", cramfs_name, cramfs_name);
+		log_write("repack.sh", "rm -f unpacked/%s.tmp\n", cramfs_name);
+	} else {
+		log_write("repack.sh", "mkcramfs -p unpacked/%s unpacked/%s.tmp\n", cramfs_name, cramfs_name);
+		log_write("repack.sh", "rm -f -r unpacked/%s\n", cramfs_name);
+		log_write("repack.sh", "dd if=%s of=unpacked/%s.secure bs=512 count=1\n", filepath, cramfs_name);
+		log_write("repack.sh", "dd if=unpacked/%s.tmp of=unpacked/%s.secure bs=512 skip=1 seek=1\n", cramfs_name, cramfs_name);
+		log_write("repack.sh", "rm -f unpacked/%s.tmp\n", cramfs_name);
+	}
+	log_write("repack.sh", "aos-resize unpacked/%s.secure\n", cramfs_name);
+	log_write("repack.sh", "mv unpacked/%s.secure %s\n", cramfs_name, filepath);
+	log_write("repack.sh", "\n");
 	
 	return 1;
 }
@@ -288,6 +331,7 @@ int parse_file(struct aos_file *file, const char *folder)
 	// possibly remove the digest & log file, if they exist
 	log_clean("digest");
 	log_clean("unpack.sh");
+	log_clean("repack.sh");
 	
 	// Parse all blocks
 	block = block_get(file, 5);
