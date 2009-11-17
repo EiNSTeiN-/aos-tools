@@ -17,10 +17,18 @@ int parse_header(struct aos_file *file, int *device)
 {
 	struct aos_block *block;
 	unsigned char **keys;
+	unsigned int i, sig;
+	
+	*device = 0;
 
 	if(!aos_verify_magic(file)) {
 		printf("error: Not an AOS2 file.\n");
 		return 0;
+	}
+	
+	if(!aos_is_signed(file)) {
+		printf("File is NOT signed (continuing anyway...).\n");
+		return 1;
 	}
 	
 	keys = mpk_possible_aos_keys(aos_signature_type(file));
@@ -159,7 +167,7 @@ int parse_flash_block(struct aos_block *block)
 	mkdir_recursive(name);
 	file_write(name, flash->data, flash->size);
 	
-	log_write("digest", "flash 0x%08x /%s\n", flash->offset, name);
+	log_write("digest", "flash 0x%08x %s\n", flash->offset, name);
 	
 	parse_flash_partition(flash->data, flash->size, flash_name(flash->offset), flash->offset, name);
 	free(name);
@@ -176,7 +184,7 @@ int parse_mtd_block(struct aos_block *block)
 	mkdir_recursive(name);
 	file_write(name, mtd->data, mtd->size);
 	
-	log_write("digest", "mtd %s 0x%08x /%s\n", mtd->name, mtd->offset, name);
+	log_write("digest", "mtd %s 0x%08x %s\n", mtd->name, mtd->offset, name);
 	
 	parse_flash_partition(mtd->data, mtd->size, mtd->name, mtd->offset, name);
 	free(name);
@@ -274,7 +282,10 @@ int parse_copy_block(struct aos_block *block)
 	file_write(name, copy->data, copy->size);
 	
 	// Write to digest
-	log_write("digest", "copy %u %s /%s\n", copy->partition, copy->name, name);
+	if(strchr(copy->name, ' ') == NULL) // Quirks to keep digest clean
+		log_write("digest", "copy %u %s %s\n", copy->partition, copy->name, name);
+	else
+		log_write("digest", "copy %u \"%s\" \"%s\"\n", copy->partition, copy->name, name);
 	
 	// Handle .cramfs.secure files
 	if(!strcasecmp(&copy->name[strlen(copy->name)-strlen(".cramfs.secure")], ".cramfs.secure")) {
@@ -292,7 +303,10 @@ int parse_delete_block(struct aos_block *block)
 	struct aos_block_delete *delete = (struct aos_block_delete  *)block->data;
 	
 	// Write the delete command to digest
-	log_write("digest", "delete %u %s\n", delete->partition, delete->name);
+	if(strchr(delete->name, ' ') == NULL) // Quirks to keep digest clean
+		log_write("digest", "delete %u %s\n", delete->partition, delete->name);
+	else
+		log_write("digest", "delete %u \"%s\"\n", delete->partition, delete->name);
 	
 	return 1;
 }
@@ -308,8 +322,31 @@ int parse_other_block(struct aos_file *file, struct aos_block *block)
 	file_write(name, block->data, block->length-sizeof(struct aos_block));
 	
 	// log the block in the digest file
-	log_write("digest", "raw /%s\n", name);
+	log_write("digest", "raw %c%c%c%c %s\n",
+		*(uint8_t *)block, *((uint8_t *)block+1), *((uint8_t *)block+2),
+		*((uint8_t *)block+3), name);
 	free(name);
+	
+	return 1;
+}
+
+int parse_unit_block(struct aos_block *block)
+{
+	struct aos_block_unit *unit = (struct aos_block_unit  *)block->data;
+	
+	if(unit->product_key[0] != 0)
+		log_write("digest", "unit %s %s\n", unit->product_name, unit->product_key);
+	else
+		log_write("digest", "unit %s\n", unit->product_name);
+	
+	return 1;
+}
+
+int parse_version_block(struct aos_block *block)
+{
+	struct aos_block_version *version = (struct aos_block_version  *)block->data;
+	
+	log_write("digest", "version %u.%u.%02u\n", version->major, version->minor, version->build);
 	
 	return 1;
 }
@@ -334,9 +371,20 @@ int parse_file(struct aos_file *file, const char *folder)
 	log_clean("repack.sh");
 	
 	// Parse all blocks
-	block = block_get(file, 5);
+	block = block_get(file, AOS_UNIT_BLOCK_ID);
 	while(block) {
 		switch(block->type) {
+			case AOS_TYPE_UNIT: {
+				parse_unit_block(block);
+				break;
+			}
+			case AOS_TYPE_VERSION: {
+				parse_version_block(block);
+				break;
+			}
+			case AOS_TYPE_DURATION: {
+				break;
+			}
 			case AOS_TYPE_FLASH: {
 				parse_flash_block(block);
 				break;

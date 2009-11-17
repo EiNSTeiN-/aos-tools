@@ -70,14 +70,14 @@ int info_parse_time(struct aos_file *file)
 {
 	struct aos_block *block;
 	
-	block = block_get(file, AOS_TIME_BLOCK_ID);
+	block = block_get(file, AOS_DURATION_BLOCK_ID);
 	if(!block) {
-		printf("error: Could not get VERSION block.\n");
+		printf("error: Could not get DURATION block.\n");
 		return 0;
 	}
 	
-	if(block->type != AOS_TYPE_TIME) {
-		printf("error: Expected TIME (%08x) block, got %c%c%c%c (%08x)\n", AOS_TYPE_TIME, 
+	if(block->type != AOS_TYPE_DURATION) {
+		printf("error: Expected DURATION (%08x) block, got %c%c%c%c (%08x)\n", AOS_TYPE_DURATION, 
 			((uint8_t *)&block->type)[0], ((uint8_t *)&block->type)[1], ((uint8_t *)&block->type)[2],
 			((uint8_t *)&block->type)[3], block->type);
 		return 0;
