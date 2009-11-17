@@ -7,6 +7,7 @@
 */
 
 #include <stdint.h>
+#include <string.h>
 
 #include "libaos.h"
 #include "block.h"
@@ -71,4 +72,25 @@ unsigned int block_offset(struct aos_file *file, struct aos_block *block)
 {
 	
 	return (uint8_t *)block - file->data;
+}
+
+struct aos_block *aos_append_block(struct aos_file *file, uint32_t type, unsigned int length)
+{
+	struct aos_block *block;
+	uint8_t *newdata;
+	
+	newdata = realloc(file->data, file->length+sizeof(struct aos_block)+length);
+	if(!newdata)
+		return NULL;
+	
+	file->data = newdata;
+	
+	block = (struct aos_block *)(file->data+file->length);
+	block->type = type;
+	block->length = sizeof(struct aos_block)+length;
+	memset(&block->data, 0, length);
+	
+	file->length += sizeof(struct aos_block)+length;
+	
+	return block;
 }

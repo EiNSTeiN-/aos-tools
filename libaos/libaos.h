@@ -16,7 +16,7 @@
 
 /* Defines */
 
-#define AOS_MAGIC				0x32534F41 // AOS2
+#define AOS_MAGIC				0x32534F41	// AOS2
 
 // Signature blocks
 #define AOS_TYPE_SIG0			0x30474953	// SIG0
@@ -29,7 +29,7 @@
 #define AOS_TYPE_CIPHER		0x48504943	// CIPH
 #define AOS_TYPE_UNIT			0x54494E55	// UNIT
 #define AOS_TYPE_VERSION		0x53524556	// VERS
-#define AOS_TYPE_TIME			0x454d4954	// TIME
+#define AOS_TYPE_DURATION		0x454d4954	// TIME
 
 // Flash memory
 #define AOS_TYPE_FLASH			0x48534c46	// FLSH
@@ -53,16 +53,20 @@
 
 #define AOS_SIGNATURE_LENGTH	128
 
+// Block numbers for AOS2 mandatory blocks
 #define AOS_SIGN_BLOCK_ID		0
 #define AOS_CIPHER_BLOCK_ID	1
 #define AOS_UNIT_BLOCK_ID		2
 #define AOS_VERSION_BLOCK_ID	3
-#define AOS_TIME_BLOCK_ID		4
+#define AOS_DURATION_BLOCK_ID	4
 
+// Magic numbers for various AOS-related files
 #define AOS_ZMfX_MAGIC			0x58664D5A // ZMfX
 #define AOS_CPIO_MAGIC			0xDAE589F0
 #define AOS_GZIP_MAGIC			0x08088B1F
 #define AOS_CRAMFS_MAGIC		0xd3c284d5
+#define AOS_CIPHER_MAGIC		0xBF959
+
 
 /* Structures */
 
@@ -70,6 +74,30 @@ struct aos_block {
 	uint32_t type;
 	uint32_t length;
 	uint8_t data[];
+} __attribute__((packed));
+
+struct aos_block_signature {
+	uint8_t data[AOS_SIGNATURE_LENGTH];
+} __attribute__((packed));
+
+struct aos_block_cipher {
+	uint32_t magic;
+	uint8_t data[AES_BLOCK_SIZE];
+} __attribute__((packed));
+
+struct aos_block_unit {
+	char product_name[16];
+	char product_key[14];
+} __attribute__((packed));
+
+struct aos_block_version {
+	uint32_t major;
+	uint32_t minor;
+	uint32_t build;
+} __attribute__((packed));
+
+struct aos_block_duration {
+	uint32_t unk[101];
 } __attribute__((packed));
 
 struct aos_block_flash {
@@ -85,17 +113,6 @@ struct aos_block_mtd {
 	uint8_t data[];
 } __attribute__((packed));
 
-struct aos_block_version {
-	uint32_t major;
-	uint32_t minor;
-	uint32_t build;
-} __attribute__((packed));
-
-struct aos_block_unit {
-	char product_name[16];
-	char product_key[14];
-} __attribute__((packed));
-
 struct aos_block_copy {
 	uint32_t partition;
 	uint8_t name[256];
@@ -105,12 +122,13 @@ struct aos_block_copy {
 
 #define AOS_PARTITION_SYSTEM	0
 #define AOS_PARTITION_DATA		1
-#define AOS_PARTITION_CRAMFS	2 // For .cramfs.secure files
+#define AOS_PARTITION_CRAMFS	2 // For .cramfs.secure files, on the A5IT only
 
 struct aos_block_delete {
 	uint32_t partition;
 	uint8_t name[256];
 } __attribute__((packed));
+
 
 struct aos_signature {
 	uint8_t data[AOS_SIGNATURE_LENGTH];
@@ -166,6 +184,9 @@ int aos_decrypt_file(struct aos_file *file, const uint8_t *aes_key);
 // Detect the key used to sign the aos file and return its index in *device.
 int aos_detect_key(struct aos_file *file, uint8_t **keys, unsigned int n, int *device);
 
+// Return 0 if the signature data is all zeroes.
+int aos_is_signed(struct aos_file *file);
+
 /* FLASH partitions generic functions */
 
 // Create a flash_file structure
@@ -195,6 +216,9 @@ struct aos_block *block_get(struct aos_file *file, int num);
 // Return the offset of the current block, counting from the start 
 // of the data buffer passed to aos_create()
 unsigned int block_offset(struct aos_file *file, struct aos_block *block);
+
+// Append a new block to the aos file
+struct aos_block *aos_append_block(struct aos_file *file, uint32_t type, unsigned int length);
 
 /* Crypto functions */
 

@@ -96,7 +96,7 @@ int aos_is_encrypted(struct aos_file *file)
 	if(block->type != AOS_TYPE_CIPHER)
 		return 0;
 	
-	if(*(uint32_t *)&block->data[0] != 0xBF959)
+	if(*(uint32_t *)&block->data[0] != AOS_CIPHER_MAGIC)
 		return 0;
 	
 	return 1;
@@ -139,3 +139,17 @@ void aos_free(struct aos_file *file)
 	return;
 }
 
+int aos_is_signed(struct aos_file *file)
+{
+	struct aos_block *block;
+	unsigned int i;
+	
+	block = block_get(file, AOS_SIGN_BLOCK_ID);
+	if(!block)
+		return 0;
+	
+	for(i=0;i<AOS_SIGNATURE_LENGTH;i++)
+		if(block->data[i] != 0) return 1;
+	
+	return 0;
+}
