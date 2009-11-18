@@ -12,6 +12,24 @@
 #include "../libaos/libaos.h"
 #include "files.h"
 #include "mpk.h"
+/*
+int parse_cipher(struct aos_file *aos, char *params)
+{
+	struct aos_block *block;
+	uint32_t value;
+	struct aos_block_cipher *cipher;
+	
+	if(sscanf(params, "%u", &value) != 1)
+		return 0;
+	
+	block = block_get(aos, AOS_CIPHER_BLOCK_ID);
+	if(!block)
+		return 0;
+	
+	
+	
+	return 1;
+}*/
 
 int parse_unit(struct aos_file *aos, char *params)
 {
@@ -204,7 +222,7 @@ int parse_copy(struct aos_file *aos, char *params, char *basepath)
 	return 1;
 }
 
-int parse_delete(struct aos_file *aos, char *params, char *basepath)
+int parse_delete(struct aos_file *aos, char *params)
 {
 	struct aos_block *block;
 	uint32_t partition;
@@ -229,6 +247,61 @@ int parse_delete(struct aos_file *aos, char *params, char *basepath)
 	return 1;
 }
 
+int parse_boot(struct aos_file *aos, char *params)
+{
+	struct aos_block *block;
+	uint32_t value;
+	struct aos_block_boot *boot;
+	
+	if(sscanf(params, "%u", &value) != 1)
+		return 0;
+	
+	block = aos_append_block(aos, AOS_TYPE_BOOT, sizeof(struct aos_block_boot));
+	if(!block) return 0;
+	
+	boot = (struct aos_block_boot *)&block->data;
+	boot->value = value;
+	
+	return 1;
+}
+
+int parse_adel(struct aos_file *aos, char *params)
+{
+	struct aos_block *block;
+	uint32_t value;
+	struct aos_block_adel *adel;
+	
+	if(sscanf(params, "%u", &value) != 1)
+		return 0;
+	
+	block = aos_append_block(aos, AOS_TYPE_ADEL, sizeof(struct aos_block_adel));
+	if(!block) return 0;
+	
+	adel = (struct aos_block_adel *)&block->data;
+	adel->value = value;
+	
+	return 1;
+}
+
+// right now, we set all durations to 24×60×60 (1 day)
+int set_duration(struct aos_file *aos, unsigned int block_count)
+{
+	struct aos_block *block;
+	struct aos_block_duration *duration;
+	unsigned int i;
+	
+	block = block_get(aos, AOS_DURATION_BLOCK_ID);
+	if(!block)
+		return 0;
+	
+	duration = (struct aos_block_duration *)&block->data;
+	duration->count = block_count;
+	for(i=0;i<block_count;i++)
+		duration->time[i] = 24*60*60;
+	
+	return 1;
+}
+
 // The digest is parsed in-place, don't use it after this call.
 struct aos_file *parse_digest(char *digest, char *filename)
 {
@@ -237,6 +310,7 @@ struct aos_file *parse_digest(char *digest, char *filename)
 	unsigned int current_length;
 	char *buffer;
 	char *line;
+	unsigned int block_count = 0;
 	
 	basepath = strdup(filename);
 	if(!basepath) {
@@ -268,8 +342,8 @@ struct aos_file *parse_digest(char *digest, char *filename)
 	}
 	
 	// Add the header blocks, those need to be there no matter what.
-	aos_append_block(aos, AOS_TYPE_SIG0, sizeof(struct aos_block_signature));
-	aos_append_block(aos, AOS_TYPE_CIPHER, sizeof(struct aos_block_cipher));
+	aos_append_block_nopadding(aos, AOS_TYPE_SIG0, sizeof(struct aos_block_signature));
+	aos_append_block_nopadding(aos, AOS_TYPE_CIPHER, sizeof(struct aos_block_cipher));
 	aos_append_block(aos, AOS_TYPE_UNIT, sizeof(struct aos_block_unit));
 	aos_append_block(aos, AOS_TYPE_VERSION, sizeof(struct aos_block_version));
 	aos_append_block(aos, AOS_TYPE_DURATION, sizeof(struct aos_block_duration));
@@ -292,36 +366,48 @@ struct aos_file *parse_digest(char *digest, char *filename)
 		}
 		*params++ = 0;
 		
-		if(!strcasecmp(line, "unit")) {
+		if(!strcasecmp(line, "cipher")) {
+			//parse_cipher(aos, params);
+		}
+		else if(!strcasecmp(line, "unit")) {
 			parse_unit(aos, params);
 		}
 		else if(!strcasecmp(line, "version")) {
 			parse_version(aos, params);
 		}
-		else if(!strcasecmp(line, "duration")) {
-			//parse_duration(aos, params);
-		}
-		else if(!strcasecmp(line, "raw")) {
-			parse_raw(aos, params, basepath);
-		}
-		else if(!strcasecmp(line, "flash")) {
-			parse_flash(aos, params, basepath);
-		}
-		else if(!strcasecmp(line, "mtd")) {
-			parse_mtd(aos, params, basepath);
-		}
-		else if(!strcasecmp(line, "copy")) {
-			parse_copy(aos, params, basepath);
-		}
-		else if(!strcasecmp(line, "delete")) {
-			parse_delete(aos, params, basepath);
-		}
 		else {
-			printf("Unknown line: \"%s\" = \"%s\"\n", line, params);
+			block_count++;
+			
+			if(!strcasecmp(line, "raw")) {
+				parse_raw(aos, params, basepath);
+			}
+			else if(!strcasecmp(line, "flash")) {
+				parse_flash(aos, params, basepath);
+			}
+			else if(!strcasecmp(line, "mtd")) {
+				parse_mtd(aos, params, basepath);
+			}
+			else if(!strcasecmp(line, "copy")) {
+				parse_copy(aos, params, basepath);
+			}
+			else if(!strcasecmp(line, "delete")) {
+				parse_delete(aos, params);
+			}
+			else if(!strcasecmp(line, "boot")) {
+				parse_boot(aos, params);
+			}
+			else if(!strcasecmp(line, "adel")) {
+				parse_adel(aos, params);
+			}
+			else {
+				printf("Unknown line: \"%s\" = \"%s\"\n", line, params);
+			}
 		}
 		
 		line = nextline;
 	}
+	
+	set_duration(aos, block_count);
 	
 	free(basepath);
 	
@@ -352,6 +438,7 @@ int main(int argc, char *argv[])
 	printf("File %s loaded, %u bytes.\n", argv[1], length);
 	
 	aos = parse_digest(buffer, argv[1]);
+	//aos_encrypt_file(aos, A5_AES);
 	
 	printf("file is %u bytes\n", aos->length);
 	

@@ -40,15 +40,17 @@
 #define AOS_TYPE_DELETE		0x54454c44	// DLET
 #define AOS_TYPE_MOVE			0x45564f4d	// MOVE
 
+// Boolean blocks
+#define AOS_TYPE_BOOT			0x544f4f42	// BOOT
+#define AOS_TYPE_ADEL			0x4c454441	// ADEL
+
 #define AOS_TYPE_SHEL			0x5348454c	// SHEL
 #define AOS_TYPE_GULP			0x47554c50	// GULP
 #define AOS_TYPE_FPAR			0x46504152	// FPAR
 #define AOS_TYPE_PARM			0x5041524d	// PARM
-#define AOS_TYPE_BOOT			0x424f4f54	// BOOT
 #define AOS_TYPE_FRMT			0x46524d54	// FRMT
 #define AOS_TYPE_PLUG			0x504c5547	// PLUG
 #define AOS_TYPE_HDDL			0x4844444c	// HDDL
-#define AOS_TYPE_ADEL			0x4144454c	// ADEL
 #define AOS_TYPE_MSGB			0x4d534742	// MSGB
 
 #define AOS_SIGNATURE_LENGTH	128
@@ -97,7 +99,8 @@ struct aos_block_version {
 } __attribute__((packed));
 
 struct aos_block_duration {
-	uint32_t unk[101];
+	uint32_t count;
+	uint32_t time[100];
 } __attribute__((packed));
 
 struct aos_block_flash {
@@ -127,6 +130,14 @@ struct aos_block_copy {
 struct aos_block_delete {
 	uint32_t partition;
 	uint8_t name[256];
+} __attribute__((packed));
+
+struct aos_block_boot {
+	uint32_t value;
+} __attribute__((packed));
+
+struct aos_block_adel {
+	uint32_t value;
 } __attribute__((packed));
 
 
@@ -181,6 +192,9 @@ int aos_is_encrypted(struct aos_file *file);
 // Decrypt an encrypted aos file.
 int aos_decrypt_file(struct aos_file *file, const uint8_t *aes_key);
 
+// Encrypt a plain aos file.
+int aos_encrypt_file(struct aos_file *file, const uint8_t *aes_key);
+
 // Detect the key used to sign the aos file and return its index in *device.
 int aos_detect_key(struct aos_file *file, uint8_t **keys, unsigned int n, int *device);
 
@@ -219,14 +233,18 @@ unsigned int block_offset(struct aos_file *file, struct aos_block *block);
 
 // Append a new block to the aos file
 struct aos_block *aos_append_block(struct aos_file *file, uint32_t type, unsigned int length);
+struct aos_block *aos_append_block_nopadding(struct aos_file *file, uint32_t type, unsigned int length);
 
 /* Crypto functions */
 
 // Parse the signature block and extract data from it.
 int aos_signature_set_data(struct aos_signature *sign, const uint8_t *sig_data);
 
-// Set the mpk key data. Data must be AOS_MPK_LENGTH, or 142 bytes long.
-int aos_signature_set_key(struct aos_signature *sign, const uint8_t *mpk_data);
+// Set the decryption key data.
+int aos_signature_set_decrypt_key(struct aos_signature *sign, const uint8_t *mpk_data);
+
+// Set the encryption key data.
+int aos_signature_set_encrypt_key(struct aos_signature *sign, const uint8_t *mpk_data);
 
 // Verify the signature of the file. 
 int aos_signature_check(struct aos_signature *sign, const uint8_t *data, unsigned int length);
@@ -239,5 +257,8 @@ int aos_cipher_set_key(struct aos_encryption *enc, const uint8_t *aes_data);
 
 // Return the decrypted data from *in
 uint8_t *aos_cipher_decrypt(struct aos_encryption *enc, const uint8_t *in, unsigned int length);
+
+// Return the encrypted data from *in
+uint8_t *aos_cipher_encrypt(struct aos_encryption *enc, const uint8_t *in, unsigned int length);
 
 #endif /* __LIBAOS_H */
