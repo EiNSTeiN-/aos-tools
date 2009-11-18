@@ -77,20 +77,46 @@ unsigned int block_offset(struct aos_file *file, struct aos_block *block)
 struct aos_block *aos_append_block(struct aos_file *file, uint32_t type, unsigned int length)
 {
 	struct aos_block *block;
+	unsigned int newlength;
 	uint8_t *newdata;
 	
-	newdata = realloc(file->data, file->length+sizeof(struct aos_block)+length);
+	newlength = sizeof(struct aos_block)+length;
+	if(newlength & 0xF)
+		newlength = (newlength & ~0xF) + 16;
+	
+	newdata = realloc(file->data, file->length+newlength);
 	if(!newdata)
 		return NULL;
-	
 	file->data = newdata;
 	
 	block = (struct aos_block *)(file->data+file->length);
+	memset(block, 0, newlength);
 	block->type = type;
-	block->length = sizeof(struct aos_block)+length;
-	memset(&block->data, 0, length);
+	block->length = newlength;
 	
-	file->length += sizeof(struct aos_block)+length;
+	file->length += newlength;
+	
+	return block;
+}
+
+struct aos_block *aos_append_block_nopadding(struct aos_file *file, uint32_t type, unsigned int length)
+{
+	struct aos_block *block;
+	unsigned int newlength;
+	uint8_t *newdata;
+	
+	newlength = sizeof(struct aos_block)+length;
+	newdata = realloc(file->data, file->length+newlength);
+	if(!newdata)
+		return NULL;
+	file->data = newdata;
+	
+	block = (struct aos_block *)(file->data+file->length);
+	memset(block, 0, newlength);
+	block->type = type;
+	block->length = newlength;
+	
+	file->length += newlength;
 	
 	return block;
 }

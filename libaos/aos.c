@@ -114,11 +114,11 @@ int aos_decrypt_file(struct aos_file *file, const uint8_t *aes_key)
 	if(block == NULL)
 		return 0;
 	
-	if(block->length != sizeof(struct aos_block)+sizeof(uint32_t)+AES_BLOCK_SIZE)
+	if(block->length != sizeof(struct aos_block)+sizeof(struct aos_block_cipher))
 		return 0;
 	
 	aos_cipher_set_iv(&enc, (const uint8_t *)&block->data[4]);
-	aos_cipher_set_key(&enc, aes_key);
+	aos_cipher_set_decrypt_key(&enc, aes_key);
 	
 	data = (uint8_t *)block + block->length;
 	length = file->length - (data - file->data);
@@ -129,6 +129,41 @@ int aos_decrypt_file(struct aos_file *file, const uint8_t *aes_key)
 	
 	memcpy(data, decrypted, length);
 	free(decrypted);
+	
+	return 1;
+}
+
+int aos_encrypt_file(struct aos_file *file, const uint8_t *aes_key)
+{
+	struct aos_encryption enc;
+	struct aos_block *block;
+	struct aos_block_cipher *cipher;
+	unsigned int length;
+	uint8_t *encrypted;
+	uint8_t *data;
+	
+	block = block_get(file, AOS_CIPHER_BLOCK_ID);
+	if(block == NULL)
+		return 0;
+	
+	if(block->length != sizeof(struct aos_block)+sizeof(struct aos_block_cipher))
+		return 0;
+	
+	cipher = (struct aos_block_cipher *)block->data;
+	
+	cipher->magic = AOS_CIPHER_MAGIC;
+	aos_cipher_set_iv(&enc, (const uint8_t *)&cipher->data);
+	aos_cipher_set_encrypt_key(&enc, aes_key);
+	
+	data = (uint8_t *)block + block->length;
+	length = file->length - (data - file->data);
+	
+	encrypted = aos_cipher_encrypt(&enc, data, length);
+	if(!encrypted)
+		return 0;
+	
+	memcpy(data, encrypted, length);
+	free(encrypted);
 	
 	return 1;
 }

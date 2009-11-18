@@ -98,9 +98,15 @@ int aos_cipher_set_iv(struct aos_encryption *enc, const uint8_t *iv)
 	return 1;
 }
 
-int aos_cipher_set_key(struct aos_encryption *enc, const uint8_t *aes_data)
+int aos_cipher_set_decrypt_key(struct aos_encryption *enc, const uint8_t *aes_data)
 {
 	AES_set_decrypt_key(aes_data, AES_BLOCK_SIZE*8 /* size in bits */, &enc->key);
+	return 1;
+}
+
+int aos_cipher_set_encrypt_key(struct aos_encryption *enc, const uint8_t *aes_data)
+{
+	AES_set_encrypt_key(aes_data, AES_BLOCK_SIZE*8 /* size in bits */, &enc->key);
 	return 1;
 }
 
@@ -129,5 +135,32 @@ uint8_t *aos_cipher_decrypt(struct aos_encryption *enc, const uint8_t *in, unsig
 	}
 	
 	return decrypted;
+}
+
+uint8_t *aos_cipher_encrypt(struct aos_encryption *enc, const uint8_t *in, unsigned int length)
+{
+	uint8_t *encrypted;
+	unsigned int done = 0;
+	
+	encrypted = (uint8_t *)malloc(length);
+	if(!encrypted)
+		return NULL;
+	
+	while(done < length) {
+		uint8_t iv[AES_BLOCK_SIZE];
+		uint8_t data[AES_BLOCK_SIZE];
+		struct aos_block *block = (struct aos_block *)&in[done];
+		
+		memcpy(iv, enc->iv, AES_BLOCK_SIZE);
+		
+		/*AES_cbc_encrypt(&in[done], data, AES_BLOCK_SIZE, &enc->key, iv, AES_ENCRYPT);
+		memcpy(&encrypted[done], &data, AES_BLOCK_SIZE);
+		done += AES_BLOCK_SIZE;*/
+		
+		AES_cbc_encrypt(&in[done], &encrypted[done], block->length, &enc->key, iv, AES_ENCRYPT);
+		done += block->length;
+	}
+	
+	return encrypted;
 }
 

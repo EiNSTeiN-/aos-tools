@@ -351,6 +351,41 @@ int parse_version_block(struct aos_block *block)
 	return 1;
 }
 
+int parse_boot_block(struct aos_block *block)
+{
+	struct aos_block_boot *boot = (struct aos_block_boot  *)block->data;
+	
+	log_write("digest", "boot %u\n", boot->value);
+	
+	return 1;
+}
+
+int parse_adel_block(struct aos_block *block)
+{
+	struct aos_block_adel *adel = (struct aos_block_adel  *)block->data;
+	
+	log_write("digest", "adel %u\n", adel->value);
+	
+	return 1;
+}
+
+int parse_cipher_block(struct aos_block *block)
+{
+	struct aos_block_cipher *cipher = (struct aos_block_cipher  *)block->data;
+	char str[AES_BLOCK_SIZE*2 + 1];
+	unsigned int i;
+	
+	for(i=0;i<AES_BLOCK_SIZE;i++) {
+		sprintf(&str[i*2], "%02x", cipher->data[i]);
+	}
+	
+	str[AES_BLOCK_SIZE*2] = 0;
+	
+	log_write("digest", "cipher %s\n", str);
+	
+	return 1;
+}
+
 int parse_file(struct aos_file *file, const char *folder)
 {
 	struct aos_block *block;
@@ -371,9 +406,13 @@ int parse_file(struct aos_file *file, const char *folder)
 	log_clean("repack.sh");
 	
 	// Parse all blocks
-	block = block_get(file, AOS_UNIT_BLOCK_ID);
+	block = block_get(file, AOS_CIPHER_BLOCK_ID);
 	while(block) {
 		switch(block->type) {
+			case AOS_TYPE_CIPHER: {
+				parse_cipher_block(block);
+				break;
+			}
 			case AOS_TYPE_UNIT: {
 				parse_unit_block(block);
 				break;
@@ -399,6 +438,14 @@ int parse_file(struct aos_file *file, const char *folder)
 			}
 			case AOS_TYPE_DELETE: {
 				parse_delete_block(block);
+				break;
+			}
+			case AOS_TYPE_BOOT: {
+				parse_boot_block(block);
+				break;
+			}
+			case AOS_TYPE_ADEL: {
+				parse_adel_block(block);
 				break;
 			}
 			default: {
