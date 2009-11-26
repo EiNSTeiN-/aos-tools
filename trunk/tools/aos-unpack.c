@@ -81,8 +81,7 @@ int parse_flash_partition(uint8_t *data, unsigned int length, const char *partit
 	
 	if(flash->header->magic != AOS_GZIP_MAGIC) {
 		if(!flash_detect_key(flash, Bootloader_Keys, MPK_KNOWN_DEVICES, &device)) {
-			printf("error: Could not verify signature on file %s\n", filepath);
-			return 0;
+			printf("Could not verify signature on file %s (continuing anyway)...\n", filepath);
 		}
 		else
 			printf("Verified signature on file %s, detected device type %s\n", filepath, mpk_device_type(device));
@@ -210,11 +209,11 @@ int parse_cramfs_archive(const char *filename, uint8_t *data, unsigned int lengt
 	}
 	
 	if(!flash_detect_key(flash, Bootloader_Keys, MPK_KNOWN_DEVICES, &device)) {
-		printf("error: Could not verify signature on file %s\n", filename);
-		return 0;
+		printf("Could not verify signature on file %s (continuing anyway)...\n", filename);
 	}
-	
-	printf("Verified signature on file %s, detected device type %s\n", filename, mpk_device_type(device));
+	else {
+		printf("Verified signature on file %s, detected device type %s\n", filename, mpk_device_type(device));
+	}
 	
 	strcpy(cramfs_name, filename);
 	cramfs_name[strlen(cramfs_name)-strlen(".secure")] = 0;
