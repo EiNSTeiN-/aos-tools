@@ -283,6 +283,40 @@ int parse_adel(struct aos_file *aos, char *params)
 	return 1;
 }
 
+int parse_shell(struct aos_file *aos, char *params, char *basepath)
+{
+	struct aos_block *block;
+	char filename[1024];
+	struct aos_block_shell *shell;
+	char *filepath;
+	unsigned int length;
+	char *buffer;
+	
+	if(sscanf(params, "%s", (char *)&filename) != 1)
+		return 0;
+	
+	filepath = bprintf("%s%s", basepath, filename);
+	if(!filepath) return 0;
+	
+	buffer = file_load(filepath, &length);
+	free(filepath);
+	if(!buffer) return 0;
+	
+	block = aos_append_block(aos, AOS_TYPE_SHELL, sizeof(struct aos_block_shell)+length);
+	if(!block) {
+		free(buffer);
+		return 0;
+	}
+	
+	shell = (struct aos_block_shell *)&block->data;
+	shell->length = length;
+	memcpy(shell->data, buffer, length);
+	
+	free(buffer);
+	
+	return 1;
+}
+
 // right now, we set all durations to 24×60×60 (1 day)
 int set_duration(struct aos_file *aos, unsigned int block_count)
 {
@@ -398,6 +432,9 @@ struct aos_file *parse_digest(char *digest, char *filename)
 			}
 			else if(!strcasecmp(line, "adel")) {
 				parse_adel(aos, params);
+			}
+			else if(!strcasecmp(line, "shell")) {
+				parse_shell(aos, params, basepath);
 			}
 			else {
 				printf("Unknown line: \"%s\" = \"%s\"\n", line, params);
