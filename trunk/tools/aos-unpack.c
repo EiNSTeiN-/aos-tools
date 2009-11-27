@@ -80,27 +80,36 @@ int parse_flash_partition(uint8_t *data, unsigned int length, const char *partit
 	}
 	
 	if(flash->header->magic != AOS_GZIP_MAGIC) {
-		if(!flash_detect_key(flash, Bootloader_Keys, MPK_KNOWN_DEVICES, &device)) {
-			printf("Could not verify signature on file %s (continuing anyway)...\n", filepath);
+		if(flash->header->bits != 0x400) {
+			printf("No signature on file %s...\n", filepath);
 		}
-		else
-			printf("Verified signature on file %s, detected device type %s\n", filepath, mpk_device_type(device));
+		else {
+			if(!flash_detect_key(flash, Bootloader_Keys, MPK_KNOWN_DEVICES, &device)) {
+				printf("Could not verify signature on file %s (continuing anyway)...\n", filepath);
+			}
+			else
+				printf("Verified signature on file %s, detected device type %s\n", filepath, mpk_device_type(device));
+		}
 	}
 	
 	if(flash->header->magic == AOS_CPIO_MAGIC) {
 		unsigned int gz_length;
 		uint8_t *gz_data;
-		const char *cpio_name;
+		char *cpio_name;
 		
 		gz_data = (uint8_t *)flash->header+flash->header->cpio;
 		gz_length = (flash->length - flash->header->cpio);
 		
-		if(*(uint32_t *)gz_data != AOS_GZIP_MAGIC) {
+		if(*(uint32_t *)gz_data == AOS_GZIP_MAGIC) {
+			cpio_name = strdup((const char *)&gz_data[10]);
+		}
+		else if((*(uint32_t *)gz_data & AOS_GZIP_NONAME_MASK) == AOS_GZIP_NONAME_MAGIC) {
+			cpio_name = bprintf("%s.cpio", partition_name);
+		}
+		else {
 			printf("error: Could not find GZIP magic at given offset in %s.\n", filepath);
 			return 0;
 		}
-		
-		cpio_name = (const char *)&gz_data[10];
 		
 		// Unpack script
 		log_write("unpack.sh", "## .cpio.gz: %s\n", filepath);
@@ -121,6 +130,8 @@ int parse_flash_partition(uint8_t *data, unsigned int length, const char *partit
 		log_write("repack.sh", "aos-flash %s -i unpacked/%s.gz\n", filepath, cpio_name);
 		log_write("repack.sh", "rm -f unpacked/%s.gz\n", cpio_name);
 		log_write("repack.sh", "\n");
+		
+		free(cpio_name);
 	}
 	else if(flash->header->magic == AOS_GZIP_MAGIC) {
 		const char *gz_name = (const char *)&data[10];
@@ -157,7 +168,7 @@ const char *flash_name(uint32_t offset)
 	return "unknown";
 }
 
-int parse_flash_block(struct aos_block *block)
+int parse_flash_block(struct aos_block *block, unsigned int blocknumber)
 {
 	struct aos_block_flash *flash = (struct aos_block_flash *)block->data;
 	char *name;
@@ -174,7 +185,7 @@ int parse_flash_block(struct aos_block *block)
 	return 1;
 }
 
-int parse_mtd_block(struct aos_block *block)
+int parse_mtd_block(struct aos_block *block, unsigned int blocknumber)
 {
 	struct aos_block_mtd *mtd = (struct aos_block_mtd  *)block->data;
 	char *name;
@@ -251,7 +262,7 @@ int parse_cramfs_archive(const char *filename, uint8_t *data, unsigned int lengt
 	return 1;
 }
 
-int parse_copy_block(struct aos_block *block)
+int parse_copy_block(struct aos_block *block, unsigned int blocknumber)
 {
 	struct aos_block_copy *copy = (struct aos_block_copy  *)block->data;
 	char *name;
@@ -297,7 +308,26 @@ int parse_copy_block(struct aos_block *block)
 	return 1;
 }
 
-int parse_delete_block(struct aos_block *block)
+int parse_shell_block(struct aos_block *block, unsigned int blocknumber)
+{
+	struct aos_block_shell *shell= (struct aos_block_shell  *)block->data;
+	char *name;
+	
+	name = bprintf("shell/script_%u.sh", blocknumber);
+	
+	// Make sure the folder exist, and write the file to disk
+	mkdir_recursive(name);
+	file_write(name, shell->data, shell->length);
+	
+	// Write to digest
+	log_write("digest", "shell %s\n", name);
+	
+	free(name);
+	
+	return 1;
+}
+
+int parse_delete_block(struct aos_block *block, unsigned int blocknumber)
 {
 	struct aos_block_delete *delete = (struct aos_block_delete  *)block->data;
 	
@@ -310,12 +340,12 @@ int parse_delete_block(struct aos_block *block)
 	return 1;
 }
 
-int parse_other_block(struct aos_file *file, struct aos_block *block)
+int parse_other_block(struct aos_block *block, unsigned int blocknumber)
 {
 	char *name;
 	
 	// write the block to disk
-	name = bprintf("raw/0x%08x_%c%c%c%c", (unsigned int)(((uint8_t *)&block->type)-file->data),
+	name = bprintf("raw/%u_%c%c%c%c", blocknumber,
 		*(uint8_t *)block, *((uint8_t *)block+1), *((uint8_t *)block+2), *((uint8_t *)block+3));
 	mkdir_recursive(name);
 	file_write(name, block->data, block->length-sizeof(struct aos_block));
@@ -329,7 +359,7 @@ int parse_other_block(struct aos_file *file, struct aos_block *block)
 	return 1;
 }
 
-int parse_unit_block(struct aos_block *block)
+int parse_unit_block(struct aos_block *block, unsigned int blocknumber)
 {
 	struct aos_block_unit *unit = (struct aos_block_unit  *)block->data;
 	
@@ -341,7 +371,7 @@ int parse_unit_block(struct aos_block *block)
 	return 1;
 }
 
-int parse_version_block(struct aos_block *block)
+int parse_version_block(struct aos_block *block, unsigned int blocknumber)
 {
 	struct aos_block_version *version = (struct aos_block_version  *)block->data;
 	
@@ -350,7 +380,7 @@ int parse_version_block(struct aos_block *block)
 	return 1;
 }
 
-int parse_boot_block(struct aos_block *block)
+int parse_boot_block(struct aos_block *block, unsigned int blocknumber)
 {
 	struct aos_block_boot *boot = (struct aos_block_boot  *)block->data;
 	
@@ -359,7 +389,7 @@ int parse_boot_block(struct aos_block *block)
 	return 1;
 }
 
-int parse_adel_block(struct aos_block *block)
+int parse_adel_block(struct aos_block *block, unsigned int blocknumber)
 {
 	struct aos_block_adel *adel = (struct aos_block_adel  *)block->data;
 	
@@ -368,7 +398,7 @@ int parse_adel_block(struct aos_block *block)
 	return 1;
 }
 
-int parse_cipher_block(struct aos_block *block)
+int parse_cipher_block(struct aos_block *block, unsigned int blocknumber)
 {
 	struct aos_block_cipher *cipher = (struct aos_block_cipher  *)block->data;
 	char str[AES_BLOCK_SIZE*2 + 1];
@@ -390,6 +420,7 @@ int parse_file(struct aos_file *file, const char *folder)
 	struct aos_block *block;
 	char cwd[2048];
 	char *full_folder;
+	unsigned int n;
 	
 	getcwd(cwd, sizeof(cwd));
 	full_folder = bprintf("%s/%s/", cwd, folder);
@@ -405,54 +436,60 @@ int parse_file(struct aos_file *file, const char *folder)
 	log_clean("repack.sh");
 	
 	// Parse all blocks
+	n = 0;
 	block = block_get(file, AOS_CIPHER_BLOCK_ID);
 	while(block) {
 		switch(block->type) {
 			case AOS_TYPE_CIPHER: {
-				parse_cipher_block(block);
+				parse_cipher_block(block, n);
 				break;
 			}
 			case AOS_TYPE_UNIT: {
-				parse_unit_block(block);
+				parse_unit_block(block, n);
 				break;
 			}
 			case AOS_TYPE_VERSION: {
-				parse_version_block(block);
+				parse_version_block(block, n);
 				break;
 			}
 			case AOS_TYPE_DURATION: {
 				break;
 			}
 			case AOS_TYPE_FLASH: {
-				parse_flash_block(block);
+				parse_flash_block(block, n);
 				break;
 			}
 			case AOS_TYPE_MTD: {
-				parse_mtd_block(block);
+				parse_mtd_block(block, n);
 				break;
 			}
 			case AOS_TYPE_COPY: {
-				parse_copy_block(block);
+				parse_copy_block(block, n);
 				break;
 			}
 			case AOS_TYPE_DELETE: {
-				parse_delete_block(block);
+				parse_delete_block(block, n);
 				break;
 			}
 			case AOS_TYPE_BOOT: {
-				parse_boot_block(block);
+				parse_boot_block(block, n);
 				break;
 			}
 			case AOS_TYPE_ADEL: {
-				parse_adel_block(block);
+				parse_adel_block(block, n);
+				break;
+			}
+			case AOS_TYPE_SHELL: {
+				parse_shell_block(block, n);
 				break;
 			}
 			default: {
 				// All unknown blocks are dumped into the /raw subdirectory
-				parse_other_block(file, block);
+				parse_other_block(block, n);
 				break;
 			}
 		}
+		n++;
 		block = block_next(file, block);
 	}
 	

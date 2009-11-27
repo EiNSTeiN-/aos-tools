@@ -39,12 +39,13 @@
 #define AOS_TYPE_COPY			0x59504F43	// COPY
 #define AOS_TYPE_DELETE		0x54454c44	// DLET
 #define AOS_TYPE_MOVE			0x45564f4d	// MOVE
+#define AOS_TYPE_SHELL			0x4c454853	// SHEL
 
 // Boolean blocks
 #define AOS_TYPE_BOOT			0x544f4f42	// BOOT
 #define AOS_TYPE_ADEL			0x4c454441	// ADEL
 
-#define AOS_TYPE_SHEL			0x5348454c	// SHEL
+// Unknown for now
 #define AOS_TYPE_GULP			0x47554c50	// GULP
 #define AOS_TYPE_FPAR			0x46504152	// FPAR
 #define AOS_TYPE_PARM			0x5041524d	// PARM
@@ -65,10 +66,12 @@
 // Magic numbers for various AOS-related files
 #define AOS_ZMfX_MAGIC			0x58664D5A // ZMfX
 #define AOS_CPIO_MAGIC			0xDAE589F0
-#define AOS_GZIP_MAGIC			0x08088B1F
 #define AOS_CRAMFS_MAGIC		0xd3c284d5
 #define AOS_CIPHER_MAGIC		0xBF959
 
+#define AOS_GZIP_MAGIC			0x08088B1F
+#define AOS_GZIP_NONAME_MAGIC	0x00088B1F
+#define AOS_GZIP_NONAME_MASK	0x00ffffffff
 
 /* Structures */
 
@@ -138,6 +141,11 @@ struct aos_block_boot {
 
 struct aos_block_adel {
 	uint32_t value;
+} __attribute__((packed));
+
+struct aos_block_shell {
+	uint32_t length;
+	uint8_t data[];
 } __attribute__((packed));
 
 
