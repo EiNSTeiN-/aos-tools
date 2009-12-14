@@ -24,6 +24,18 @@ unsigned char **mpk_possible_aos_keys(uint32_t sign_type)
 	return NULL;
 }
 
+const char *mpk_signature_name(uint32_t sign_type)
+{
+	switch(sign_type) {
+		case AOS_TYPE_SIG0:	return "Release";
+		case AOS_TYPE_SIG1:	return "Development";
+		case AOS_TYPE_SIG2:	return "Plugin";
+		case AOS_TYPE_SIG3:	return "HDD";
+		case AOS_TYPE_SIG4:	return "Games";
+	}
+	return "Unknown";
+}
+
 unsigned char **mpk_possible_bootloader_keys()
 {
 	return Bootloader_Keys;

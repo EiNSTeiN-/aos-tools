@@ -11,6 +11,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdarg.h>
+#include <errno.h>
 
 #include "files.h"
 
@@ -22,7 +23,7 @@ uint8_t *file_load(const char *filename, unsigned int *size)
 	
 	file = fopen(filename, "r+b");
 	if(!file) {
-		printf("fopen: error opening file\n");
+		fprintf(stderr, "Couldn't open file %s; %s\n", filename, strerror(errno));
 		return NULL;
 	}
 	
@@ -30,14 +31,14 @@ uint8_t *file_load(const char *filename, unsigned int *size)
 	filesize = ftell(file);
 	
 	if(filesize <= 0) {
-		printf("filesize <= 0: filesize is %lu\n", filesize);
+		fprintf(stderr, "Filesize error on file %s; %s\n", filename, strerror(errno));
 		fclose(file);
 		return NULL;
 	}
 	
 	buffer = malloc(filesize);
 	if(!buffer) {
-		printf("malloc: error allocating %lu bytes\n", filesize);
+		fprintf(stderr, "error allocating %lu bytes; %s\n", filesize, strerror(errno));
 		fclose(file);
 		return NULL;
 	}
@@ -45,7 +46,7 @@ uint8_t *file_load(const char *filename, unsigned int *size)
 	fseek(file, 0, SEEK_SET);
 	readsize = fread(buffer, 1, filesize, file);
 	if(readsize != filesize) {
-		printf("fread: error reading file: wanted %lu bytes and got %lu bytes\n", filesize, readsize);
+		fprintf(stderr, "Could not read %lu bytes from file %s, only %lu bytes read; %s\n", filesize, filename, readsize, strerror(errno));
 		fclose(file);
 		return NULL;
 	}
@@ -64,13 +65,13 @@ int file_write(const char *filename, const char *buffer, unsigned int length)
 	
 	file = fopen(filename, "w+b");
 	if(!file) {
-		printf("fopen: error opening file: %s\n", filename);
+		fprintf(stderr, "Couldn't open file %s; %s\n", filename, strerror(errno));
 		return 0;
 	}
 	
 	writesize = fwrite(buffer, 1, length, file);
 	if(writesize != length) {
-		printf("fwrite: error reading file: wanted %u bytes and got %lu bytes\n", length, writesize);
+		fprintf(stderr, "Could not write %u bytes to file %s, only %lu bytes written; %s\n", length, filename, writesize, strerror(errno));
 		fclose(file);
 		return 0;
 	}
@@ -142,11 +143,13 @@ int log_write(const char *filename, const char *format, ...)
 	
 	file = fopen(filename,"a");
 	if(!file) {
+		fprintf(stderr, "Couldn't open file %s; %s\n", filename, strerror(errno));
 		free(str);
 		return 0;
 	}
 	
 	if(fwrite(str,strlen(str),1,file) != 1) {
+		fprintf(stderr, "Could not write line to %s; %s\n", filename, strerror(errno));
 		free(str);
 		fclose(file);
 		return 0;
