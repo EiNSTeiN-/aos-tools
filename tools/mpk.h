@@ -58,5 +58,6 @@ unsigned char **mpk_possible_bootloader_keys();
 unsigned char **mpk_possible_aes_keys();
 
 const char *mpk_device_type(int device);
+const char *mpk_signature_name(uint32_t sign_type);
 
 #endif /* __MPK_H */
