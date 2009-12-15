@@ -123,7 +123,14 @@ int parse_header(struct aos_file *file, int *detected_device)
 	if(*detected_device != -1) {
 		printf("  Device type:\t\t %s (forced by user)\n", mpk_device_type(*detected_device));
 		
-	} else {
+		/* The device type is specified by the user, 
+			we verify the signature to make sure. */
+		if(aos_is_signed(file) && !aos_verify_signature(file, keys[*detected_device])) {
+			fprintf(stderr, "%s: File is signed, but signature could not be verified.\n", program);
+			return 1;
+		}
+	}
+	else {
 		if(!aos_is_signed(file)) {
 			
 			/* TODO: if the file is not signed, but not encrypted either, 
@@ -135,7 +142,8 @@ int parse_header(struct aos_file *file, int *detected_device)
 		}
 		
 		if(!aos_detect_key(file, keys, MPK_KNOWN_DEVICES, detected_device)) {
-			fprintf(stderr, "%s: Could not detect device type from signature data.\n", program);
+			fprintf(stderr, "%s: Could not detect device type from signature data.\n"
+							"Specify --a5 or --a5it.", program);
 			return 0;
 		}
 		
@@ -232,16 +240,6 @@ int main(int argc, char *argv[])
 		
 		switch(c)
 		{
-			case 0:
-				/* If this option set a flag, do nothing else now. */
-				if(options[index].flag != 0)
-					break;
-				printf("option %s", options[index].name);
-				if(optarg)
-					printf(" with arg %s", optarg);
-				printf("\n");
-				break;
-			
 			case 'a':
 				header = 1;
 				list = 1;
@@ -268,6 +266,11 @@ int main(int argc, char *argv[])
 	if(verbose || help) {
 		printf("AOS info utility, written by EiNSTeiN_\n");
 		printf("\thttp://archos.g3nius.org/\n\n");
+	}
+	
+	if(optind >= argc) {
+		printf("Note: Specify at least one file to parse.\n\n");
+		help = 1;
 	}
 	
 	if(help) {
