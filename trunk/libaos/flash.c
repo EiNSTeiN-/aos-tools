@@ -68,3 +68,13 @@ void flash_free(struct flash_file *file)
 	return;
 }
 
+int flash_is_signed(struct flash_file *file)
+{
+	unsigned int i;
+	
+	for(i=0;i<AOS_SIGNATURE_LENGTH;i++)
+		if(file->header->signature[i] != 0) return 1;
+	
+	return 0;
+}
+
