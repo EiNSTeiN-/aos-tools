@@ -221,6 +221,9 @@ int flash_verify_signature(struct flash_file *file, const uint8_t *mpk_key);
 // Detect the key used to sign the flash file and return its index in *device.
 int flash_detect_key(struct flash_file *file, uint8_t **keys, unsigned int n, int *device);
 
+// Return 0 if the signature data is all zeroes.
+int flash_is_signed(struct flash_file *file);
+
  /* Block functions for AOS files */
 
 // return the first block in the file
