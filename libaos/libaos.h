@@ -64,8 +64,8 @@
 #define AOS_DURATION_BLOCK_ID	4
 
 // Magic numbers for various AOS-related files
-#define AOS_ZMfX_MAGIC			0x58664D5A // ZMfX
-#define AOS_CPIO_MAGIC			0xDAE589F0
+#define AOS_ZMfX_MAGIC		0x58664D5A // ZMfX
+#define AOS_KERNEL_MAGIC		0xDAE589F0
 #define AOS_CRAMFS_MAGIC		0xd3c284d5
 #define AOS_CIPHER_MAGIC		0xBF959
 
@@ -167,11 +167,13 @@ struct aos_file {
 struct flash_header {
 	uint32_t magic;
 	uint32_t bits;
-	uint8_t signature[128];
+	uint8_t signature[AOS_SIGNATURE_LENGTH];
 	uint32_t unk_88; // data is signed from here to eof
-	uint32_t filesize; // size of the file
-	uint32_t entrypoint; // address of the file's entry point
-	uint32_t cpio; // offset to the .cpio.gz file
+	uint32_t filesize; // size of the file: always populated
+	uint32_t entrypoint; // address of the file's entry point: in boot1 this
+						// is typically 0x87e80100, in cramfs files this is 0x100,
+						// in init/recovery kernel this is not populated
+	uint32_t cpio; // offset to the .cpio.gz file: populated only in init/recovery kernel
 	uint32_t cpio_size; // size of the .cpio.gz file
 	uint32_t unk_9C[25];
 	uint8_t data[];
@@ -209,6 +211,9 @@ int aos_detect_key(struct aos_file *file, uint8_t **keys, unsigned int n, int *d
 // Return 0 if the signature data is all zeroes.
 int aos_is_signed(struct aos_file *file);
 
+// Clear the signature from an aos file SIGN block.
+int flash_clear_signature(struct flash_file *file);
+
 /* FLASH partitions generic functions */
 
 // Create a flash_file structure
@@ -223,6 +228,9 @@ int flash_detect_key(struct flash_file *file, uint8_t **keys, unsigned int n, in
 
 // Return 0 if the signature data is all zeroes.
 int flash_is_signed(struct flash_file *file);
+
+// Clear the signature from a flash segment header
+int flash_clear_signature(struct flash_file *file);
 
  /* Block functions for AOS files */
 

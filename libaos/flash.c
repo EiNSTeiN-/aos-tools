@@ -78,3 +78,8 @@ int flash_is_signed(struct flash_file *file)
 	return 0;
 }
 
+int flash_clear_signature(struct flash_file *file)
+{
+	memset(file->header->signature, 0, AOS_SIGNATURE_LENGTH);
+	return 1;
+}

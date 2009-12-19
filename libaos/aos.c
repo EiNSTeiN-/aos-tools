@@ -177,14 +177,35 @@ void aos_free(struct aos_file *file)
 int aos_is_signed(struct aos_file *file)
 {
 	struct aos_block *block;
+	struct aos_block_signature *signature;
 	unsigned int i;
 	
 	block = block_get(file, AOS_SIGN_BLOCK_ID);
 	if(!block)
 		return 0;
 	
+	signature = (struct aos_block_signature *)&block->data;
+	
 	for(i=0;i<AOS_SIGNATURE_LENGTH;i++)
-		if(block->data[i] != 0) return 1;
+		if(signature->data[i] != 0) return 1;
 	
 	return 0;
 }
+
+int aos_clear_signature(struct aos_file *file)
+{
+	struct aos_block *block;
+	struct aos_block_signature *signature;
+	
+	block = block_get(file, AOS_SIGN_BLOCK_ID);
+	if(!block)
+		return 0;
+	
+	signature = (struct aos_block_signature *)&block->data;
+	
+	memset(signature->data, 0, AOS_SIGNATURE_LENGTH);
+	
+	return 0;
+}
+
+
