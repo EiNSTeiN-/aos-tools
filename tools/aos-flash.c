@@ -157,6 +157,14 @@ int do_file(const char *filename)
 		return 0;
 	}
 	
+	// Detect file type
+	if(flash->header->magic != AOS_KERNEL_MAGIC) {
+		fprintf(stderr, "%s: The file is not an \"init\" or \"recovery\" flash segment.", program);
+		flash_free(flash);
+		free(buffer);
+		return 0;
+	}
+	
 	if(device != -1) {
 		if(verbose)
 			printf("Device type: %s (forced by user)\n", mpk_device_type(device));
@@ -193,14 +201,6 @@ int do_file(const char *filename)
 			if(verbose)
 				printf("Device type: %s (detected from signature data)\n", mpk_device_type(device));
 		}
-	}
-	
-	// Detect file type
-	if(flash->header->magic != AOS_CPIO_MAGIC) {
-		fprintf(stderr, "%s: The file is not an \"init\" or \"recovery\" flash segment.", program);
-		flash_free(flash);
-		free(buffer);
-		return 0;
 	}
 	
 	switch(action) {
@@ -250,27 +250,20 @@ int main(int argc, char *argv[])
 		
 		switch(c)
 		{
-			case 'v':
-				verbose = 1;
-				break;
+			case 0: break;
+			case '?': break;
 			
-			case 'h':
-				help = 1;
-				break;
+			case 'v': verbose = 1; break;
+			case 'h': help = 1; break;
 			
 			case 'x':
 				action = ACTION_CPIO_EXTRACT;
 				output = optarg;
 				break;
-			
 			case 'i':
 				action = ACTION_CPIO_INSERT;
 				input = optarg;
 				break;
-			
-			case '?':
-			       /* getopt_long already printed an error message. */
-			       break;
 			
 			default:
 				printf("Error: unknown option %02x (%c)\n", c, c);
@@ -279,18 +272,9 @@ int main(int argc, char *argv[])
 	}
 	
 	if(verbose || help) {
-		printf("AOS info utility, written by EiNSTeiN_\n");
+		printf("aos-flash utility, part of aos-tools.\n");
+		printf("\thttp://code.google.com/p/aos-tools/\n");
 		printf("\thttp://archos.g3nius.org/\n\n");
-	}
-	
-	if(action < 0) {
-		printf("Note: You must specify either --extract or --insert\n\n");
-		help = 1;
-	}
-	
-	if(argc-optind > 1 || argc-optind <= 0) {
-		printf("Note: Please specify only one target file.\n\n");
-		help = 1;
 	}
 	
 	if(help) {
@@ -310,6 +294,16 @@ int main(int argc, char *argv[])
 		return 1;
 	}
 	
+	if(action < 0) {
+		printf("Note: You must specify either --extract or --insert. Use --help for help.\n");
+		return 1;
+	}
+	
+	if(argc-optind > 1 || argc-optind <= 0) {
+		printf("Note: Please specify only one target file. Use --help for help.\n");
+		return 1;
+	}
+	
 	if(!do_file(argv[optind]))
 		return 1;
 	
@@ -320,6 +314,3 @@ int main(int argc, char *argv[])
 	
 	return 0;
 }
-
-
-

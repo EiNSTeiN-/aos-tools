@@ -125,9 +125,11 @@ int parse_header(struct aos_file *file, int *detected_device)
 		
 		/* The device type is specified by the user, 
 			we verify the signature to make sure. */
-		if(aos_is_signed(file) && !aos_verify_signature(file, keys[*detected_device])) {
-			fprintf(stderr, "%s: File is signed, but signature could not be verified.\n", program);
-			return 1;
+		if(aos_is_signed(file)) {
+			if(aos_verify_signature(file, keys[*detected_device]))
+				printf("  Signature is valid:\t Yes\n");
+			else
+				printf("  Signature is valid:\t No\n");
 		}
 	}
 	else {
@@ -147,36 +149,22 @@ int parse_header(struct aos_file *file, int *detected_device)
 			return 0;
 		}
 		
+		printf("  Signature is valid:\t Yes\n");
 		printf("  Device type:\t\t %s (detected from signature data)\n", mpk_device_type(*detected_device));
 	}
 	
 	return 1;
 }
 
-int do_file(const char *filename)
+int do_aos(const char *filename, uint8_t *buffer, unsigned int length)
 {
 	struct aos_file *aos;
-	unsigned int length;
-	uint8_t *buffer;
 	int detected_device = device;
-
-	printf("Parsing \"%s\":\n", filename);
-	
-	// Load the file
-	buffer = file_load(filename, &length);
-	if(buffer == NULL) {
-		fprintf(stderr, "%s: Could not load file.\n", program);
-		return 0;
-	}
-	
-	if(verbose)
-		printf("  File size:\t\t %u bytes.\n", length);
 	
 	// Create the aos object
 	aos = aos_create(buffer, length);
 	if(aos == NULL) {
 		fprintf(stderr, "%s: aos_create failed.\n", program);
-		free(buffer);
 		return 0;
 	}
 	
@@ -184,7 +172,6 @@ int do_file(const char *filename)
 	if(!parse_header(aos, &detected_device)) {
 		fprintf(stderr, "%s: Could not parse header for: %s\n", program, filename);
 		aos_free(aos);
-		free(buffer);
 		return 0;
 	}
 	
@@ -195,7 +182,6 @@ int do_file(const char *filename)
 			fprintf(stderr, "%s: Could not decrypt file.\n", program);
 			
 			aos_free(aos);
-			free(buffer);
 			return 0;
 		}
 	}
@@ -217,9 +203,131 @@ int do_file(const char *filename)
 		/* TODO: list all blocks */
 	}
 	
+	/*
+	if(metadata) {
+		TODO: There is metadata to be extracted from the gzip archives, 
+		the cramfs archives, any compiled binary:
+			- compilation paths
+			- compilation timestamps
+			- gzip timestamp
+			- etc.
+	}
+	*/
+	
 	printf("\n");
 	
 	aos_free(aos);
+	
+	return 1;
+}
+
+int do_flash(const char *filename, uint8_t *buffer, unsigned int length)
+{
+	struct flash_file *flash;
+	int device;
+	
+	if(!header) {
+		printf("%s: Nothing to do for %s.\n", program, filename);
+		return 0;
+	}
+	
+	// Create the flash object
+	flash = flash_create(buffer, length);
+	if(flash == NULL) {
+		fprintf(stderr, "%s: flash_create failed.\n", program);
+		return 0;
+	}
+	
+	printf("\n");
+	printf("Header Information:\n");
+	
+	switch(flash->header->magic) {
+		case AOS_ZMfX_MAGIC: 
+			printf("  File type:\t\t Second stage bootloader\n");
+			break;
+		case AOS_KERNEL_MAGIC:
+			printf("  File type:\t\t Kernel (zImage+initramfs)\n");
+			break;
+		case AOS_CRAMFS_MAGIC:
+			printf("  File type:\t\t Cramfs\n");
+			break;
+		default:
+			printf("  File type:\t\t Unknown!\n");
+			break;
+	}
+	
+	if(!flash_is_signed(flash)) {
+		printf("  Signature present:\t No\n");
+	}
+	else {
+		printf("  Signature present:\t Yes\n");
+		printf("    Signature size:\t %u bits\n", flash->header->bits);
+		
+		// Parse & verify the header
+		if(!flash_detect_key(flash, Bootloader_Keys, MPK_KNOWN_DEVICES, &device)) {
+			printf("    Signature is valid:\t No\n");
+		}
+		else {
+			printf("    Signature is valid:\t Yes\n");
+			printf("  Device type:\t\t %s (detected from signature data)\n", mpk_device_type(device));
+		}
+	}
+	
+	if(flash->header->filesize == length) {
+		printf("  Filesize:\t\t %u bytes (this is correct)\n", flash->header->filesize);
+	}
+	else {
+		printf("  Filesize:\t\t %u bytes (this is wrong, this file is %u bytes)\n", flash->header->filesize, length);
+	}
+	
+	printf("  Entry point:\t\t 0x%08x\n", flash->header->entrypoint);
+	
+	if(flash->header->cpio) {
+		printf("  Initramfs present:\t Yes\n");
+		printf("    Initramfs offset:\t 0x%08x\n", flash->header->cpio);
+		printf("    Initramfs size:\t %u bytes\n", flash->header->cpio_size);
+	} else {
+		printf("  Initramfs present:\t No\n");
+	}
+	
+	printf("\n");
+	
+	flash_free(flash);
+	
+	return 1;
+}
+
+int do_file(const char *filename)
+{
+	unsigned int length;
+	uint8_t *buffer;
+
+	printf("Parsing \"%s\":\n", filename);
+	
+	// Load the file
+	buffer = file_load(filename, &length);
+	if(buffer == NULL) {
+		fprintf(stderr, "%s: Could not load file.\n", program);
+		return 0;
+	}
+	
+	if(verbose)
+		printf("  File size:\t\t %u bytes.\n", length);
+	
+	switch(*(uint32_t *)buffer) {
+		case AOS_MAGIC:
+			do_aos(filename, buffer, length);
+			break;
+		case AOS_ZMfX_MAGIC:
+		case AOS_KERNEL_MAGIC:
+		case AOS_CRAMFS_MAGIC:
+			do_flash(filename, buffer, length);
+			break;
+		default:
+			fprintf(stderr, "%s: Unknown file type.\n", filename);
+			break;
+	}
+	
 	free(buffer);
 	
 	return 1;
@@ -240,22 +348,16 @@ int main(int argc, char *argv[])
 		
 		switch(c)
 		{
+			case 0: break;
+			case '?': break;
+			
+			case 'v': verbose = 1; break;
+			case 'h': help = 1; break;
+			
 			case 'a':
 				header = 1;
 				list = 1;
 				break;
-			
-			case 'v':
-				verbose = 1;
-				break;
-			
-			case 'h':
-				help = 1;
-				break;
-			
-			case '?':
-			       /* getopt_long already printed an error message. */
-			       break;
 			
 			default:
 				printf("Error: unknown option %02x (%c)\n", c, c);
@@ -264,13 +366,9 @@ int main(int argc, char *argv[])
 	}
 	
 	if(verbose || help) {
-		printf("AOS info utility, written by EiNSTeiN_\n");
+		printf("aos-info utility, part of aos-tools\n");
+		printf("\thttp://code.google.com/p/aos-tools/\n");
 		printf("\thttp://archos.g3nius.org/\n\n");
-	}
-	
-	if(optind >= argc) {
-		printf("Note: Specify at least one file to parse.\n\n");
-		help = 1;
 	}
 	
 	if(help) {
@@ -278,9 +376,9 @@ int main(int argc, char *argv[])
 		printf("Usage:\n");
 		printf("  %s [options...] [files...]\n\n", program);
 		printf("Options:\n");
-		printf("  --header (default)\tDisplays only the header information (signature, unit, version)\n");
-		printf("  --list\t\tDisplays a list of all blocks\n");
-		printf("  --all, -a\t\tCombines both options above\n");
+		printf("  --header (default)\tDisplays only the header information.\n");
+		printf("  --list\t\tDisplays a list of all blocks, for .aos containers only.\n");
+		printf("  --all, -a\t\tDisplay all available information (all options above).\n");
 		printf("\n");
 		printf("  --a5\t\t\tAssume the target .aos is for the Archos 5/7 devices\n");
 		printf("  --a5it\t\tAssume the target .aos is for the Archos 5 Internet Tablet with Android\n");
@@ -291,10 +389,15 @@ int main(int argc, char *argv[])
 		return 1;
 	}
 	
+	if(optind >= argc) {
+		printf("Note: Specify at least one file to parse. Use --help for help.\n");
+		return 1;
+	}
+	
 	if(!header && !list)
 		header = 1; /* default behaviour is to echo header info */
 	
-	for(;optind < argc;optind++)
+	for(;optind<argc;optind++)
              do_file(argv[optind]);
 	
 	if(verbose) {
@@ -304,6 +407,3 @@ int main(int argc, char *argv[])
 	
 	return 0;
 }
-
-
-
