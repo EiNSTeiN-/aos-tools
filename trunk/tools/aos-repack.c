@@ -12,6 +12,7 @@
 #include "../libaos/libaos.h"
 #include "files.h"
 #include "mpk.h"
+
 /*
 int parse_cipher(struct aos_file *aos, char *params)
 {
