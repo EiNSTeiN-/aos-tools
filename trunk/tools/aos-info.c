@@ -33,6 +33,7 @@ static struct option options[] =
 	/* Which device keys to use? */
 	{ "a5",		no_argument,		&device, MPK_DEVICE_A5 },
 	{ "a5it",		no_argument,		&device, MPK_DEVICE_A5IT },
+	{ "a3g",		no_argument,		&device, MPK_DEVICE_A3GP },
 	
 	/* Generic options */
 	{ "verbose",	no_argument,		0, 'v' },
@@ -139,13 +140,13 @@ int parse_header(struct aos_file *file, int *detected_device)
 				the device type can be detected from the UNIT block. */
 			
 			fprintf(stderr, "%s: Could not detect device type because the file is not signed.\n"
-							"\tSpecify --a5 or --a5it.\n", program);
+							"\tSpecify --a5, --a5it or --a3g.\n", program);
 			return 0;
 		}
 		
 		if(!aos_detect_key(file, keys, MPK_KNOWN_DEVICES, detected_device)) {
 			fprintf(stderr, "%s: Could not detect device type from signature data.\n"
-							"Specify --a5 or --a5it.", program);
+							"Specify --a5, --a5it or --a3g.", program);
 			return 0;
 		}
 		
@@ -372,7 +373,7 @@ int main(int argc, char *argv[])
 	}
 	
 	if(help) {
-		printf("Display useful information on the contents of an .aos archive\n\n");
+		printf("Display useful information on the contents of an .aos archive.\n\n");
 		printf("Usage:\n");
 		printf("  %s [options...] [files...]\n\n", program);
 		printf("Options:\n");
@@ -382,6 +383,7 @@ int main(int argc, char *argv[])
 		printf("\n");
 		printf("  --a5\t\t\tAssume the target .aos is for the Archos 5/7 devices\n");
 		printf("  --a5it\t\tAssume the target .aos is for the Archos 5 Internet Tablet with Android\n");
+		printf("  --a3g\t\t\tAssume the target .aos is for the Archos 3G+ from SFR\n");
 		printf("    In most cases, this can be auto-detected.\n");
 		printf("\n");
 		printf("  --help, -h\t\tDisplay this text\n");
