@@ -46,6 +46,7 @@ static struct option options[] =
 	/* Which device keys to use? */
 	{ "a5",		no_argument,		&device, MPK_DEVICE_A5 },
 	{ "a5it",		no_argument,		&device, MPK_DEVICE_A5IT },
+	{ "a3g",		no_argument,		&device, MPK_DEVICE_A3GP },
 	
 	/* Generic options */
 	{ "verbose",	no_argument,		0, 'v' },
@@ -125,6 +126,7 @@ int parse_flash_partition(uint8_t *data, unsigned int length, const char *partit
 		unsigned int gz_length;
 		uint8_t *gz_data;
 		char *folder_name;
+		char *device_shortname;
 		
 		gz_data = (uint8_t *)flash->header+flash->header->cpio;
 		gz_length = (flash->length - flash->header->cpio);
@@ -143,11 +145,18 @@ int parse_flash_partition(uint8_t *data, unsigned int length, const char *partit
 			return 0;
 		}
 		
+		switch(detected_device) {
+			case MPK_DEVICE_A5: device_shortname = "a5"; break;
+			case MPK_DEVICE_A5IT: device_shortname = "a5it"; break;
+			case MPK_DEVICE_A3GP: device_shortname = "a3g"; break;
+			default: device_shortname = "unk"; break;
+		}
+		
 		// Unpack script
 		log_write("unpack.sh", "## zImage+initramfs: %s\n", filepath);
 		log_write("unpack.sh", "rm -f -r unpacked/%s/\n", folder_name);
 		log_write("unpack.sh", "mkdir -p unpacked/%s/initramfs/\n", folder_name);
-		log_write("unpack.sh", "aos-unpack %s --output unpacked/%s/ --zimage zImage --initramfs initramfs.cpio.gz\n", filepath, folder_name);
+		log_write("unpack.sh", "aos-unpack %s --%s --output unpacked/%s/ --zimage zImage --initramfs initramfs.cpio.gz\n", filepath, device_shortname, folder_name);
 		log_write("unpack.sh", "gunzip --decompress unpacked/%s/initramfs.cpio.gz\n", folder_name);
 		log_write("unpack.sh", "(cd unpacked/%s/initramfs/ && cpio -i -d -H newc -F ../initramfs.cpio --no-absolute-filenames)\n", folder_name, folder_name);
 		log_write("unpack.sh", "rm unpacked/%s/initramfs.cpio\n", folder_name);
@@ -158,7 +167,7 @@ int parse_flash_partition(uint8_t *data, unsigned int length, const char *partit
 		log_write("repack.sh", "(cd unpacked/%s/initramfs/ && find . | cpio -o -H newc -F ../initramfs.cpio)\n", folder_name);
 		log_write("repack.sh", "rm -f -r unpacked/%s/initramfs/\n", folder_name);
 		log_write("repack.sh", "gzip --name --best unpacked/%s/initramfs.cpio\n", folder_name);
-		log_write("repack.sh", "aos-repack --kernel %s --zimage unpacked/%s/zImage --initramfs unpacked/%s/initramfs.cpio.gz\n", filepath, folder_name, folder_name);
+		log_write("repack.sh", "aos-repack --kernel --output %s --zimage unpacked/%s/zImage --initramfs unpacked/%s/initramfs.cpio.gz\n", filepath, folder_name, folder_name);
 		log_write("repack.sh", "rm -f -r  unpacked/%s/\n", folder_name);
 		log_write("repack.sh", "\n");
 		
@@ -316,7 +325,7 @@ int parse_cramfs_archive(const char *filename, uint8_t *data, unsigned int lengt
 		log_write("repack.sh", "mkcramfs unpacked/%s unpacked/%s.tmp\n", cramfs_name, cramfs_name);
 		log_write("repack.sh", "rm -f -r unpacked/%s\n", cramfs_name);
 		log_write("repack.sh", "aos-fix --add-header unpacked/%s.tmp\n", cramfs_name);
-		log_write("repack.sh", "mv unpacked/%s.tmp unpacked/%s.secure\n", cramfs_name);
+		log_write("repack.sh", "mv unpacked/%s.tmp unpacked/%s.secure\n", cramfs_name, cramfs_name);
 	} else {
 		// create a cramfs with padding for the header, and write the header in-place
 		log_write("repack.sh", "mkcramfs -p unpacked/%s unpacked/%s.secure\n", cramfs_name, cramfs_name);
@@ -616,13 +625,13 @@ int parse_aos_header(struct aos_file *file, int *detected_device)
 				the device type can be detected from the UNIT block. */
 			
 			fprintf(stderr, "%s: Could not detect device type because the file is not signed.\n"
-							"\tSpecify --a5 or --a5it.\n", program);
+							"\tSpecify --a5, --a5it or --a3g.\n", program);
 			return 0;
 		}
 		
 		if(!aos_detect_key(file, keys, MPK_KNOWN_DEVICES, detected_device)) {
 			fprintf(stderr, "%s: Could not detect device type from signature data.\n"
-							"Specify --a5 or --a5it.", program);
+							"Specify --a5, --a5it or --a3g.", program);
 			return 0;
 		}
 		
@@ -769,13 +778,13 @@ int parse_flash_header(struct flash_file *file, int *detected_device)
 	else {
 		if(!flash_is_signed(file)) {
 			fprintf(stderr, "%s: Could not detect device type because the file is not signed.\n"
-							"\tSpecify --a5 or --a5it.\n", program);
+							"\tSpecify --a5, --a5it or --a3g.\n", program);
 			return 0;
 		}
 		
 		if(!flash_detect_key(file, Bootloader_Keys, MPK_KNOWN_DEVICES, detected_device)) {
 			fprintf(stderr, "%s: Could not detect device type from signature data.\n"
-							"Specify --a5 or --a5it.", program);
+							"Specify --a5, --a5it or --a3g.", program);
 			return 0;
 		}
 		
@@ -896,16 +905,17 @@ int main(int argc, char *argv[])
 		printf("Usage:\n");
 		printf("  %s [options...] [files...]\n\n", program);
 		printf("Options:\n");
-		printf("  --extract, -x (default)\tExtract all parts of the file to disk.\n");
+		printf("  --extract, -x (default) Extract all parts of the file to disk.\n");
 		printf("  --decrypt, -d\t\tDecrypt the file (.aos only), and dump the decrypted output to disk.\n");
 		printf("\n");
-		printf("  --output, -o [out]\t\tSpecify the output folder.\n");
+		printf("  --output, -o [out]\tSpecify the output folder.\n");
 		printf("  --force, -f\t\tForce unpacking even if signature is invalid.\n");
 		printf("  --zimage, -i [file]\tUse this filename for zImage. Meaningful only with a kernel flash segment.\n");
-		printf("  --initramfs, -r [file]\tUse this filename for initramfs. Meaningful only with a kernel flash segment.\n");
+		printf("  --initramfs, -r [file] Use this filename for initramfs. Meaningful only with a kernel flash segment.\n");
 		printf("\n");
 		printf("  --a5\t\t\tAssume the target .aos is for the Archos 5/7 devices\n");
 		printf("  --a5it\t\tAssume the target .aos is for the Archos 5 Internet Tablet with Android\n");
+		printf("  --a3g\t\t\tAssume the target .aos is for the Archos 3G+ from SFR\n");
 		printf("    In most cases, this can be auto-detected.\n");
 		printf("\n");
 		printf("  --help, -h\t\tDisplay this text\n");
