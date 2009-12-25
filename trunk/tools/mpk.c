@@ -51,6 +51,7 @@ const char *mpk_device_type(int device)
 	switch(device) {
 	case MPK_DEVICE_A5:	return "Archos 5";
 	case MPK_DEVICE_A5IT:	return "Archos 5 Internet Tablet with Android";
+	case MPK_DEVICE_A3GP:	return "Archos 3G+ from SFR";
 	}
 	
 	return "Unknown";
