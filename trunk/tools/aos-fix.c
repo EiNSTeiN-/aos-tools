@@ -278,8 +278,8 @@ int main(int argc, char *argv[])
 		printf("Usage:\n");
 		printf("  %s [options] [files...]\n\n", program);
 		printf("Options:\n");
-		printf("  --clear-signature\t\tClear the signature out of a SIGN block, or a flash segment header.\n");
-		printf("  --fix-filesize\t\tFix the filesize field of a flash segment to the actual size of the file.\n");
+		printf("  --clear-signature\tClear the signature out of a SIGN block, or a flash segment header.\n");
+		printf("  --fix-filesize\tFix the filesize field of a flash segment to the actual size of the file.\n");
 		printf("  --add-header\t\tAdd an archos header to the specified file (for cramfs files only).\n");
 		printf("\n");
 		printf("  --overwrite\t\tFor --add-header, do not resize the file but rather overwrite the current header.\n");
