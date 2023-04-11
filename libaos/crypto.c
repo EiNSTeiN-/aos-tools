@@ -36,14 +36,14 @@ int aos_signature_init(struct aos_signature *sign)
 	sign->rsa = RSA_new();
 	if(sign->rsa == NULL)
 		return 0;
+
+	RSA_set_method(sign->rsa, RSA_PKCS1_OpenSSL());
 	
-	RSA_set_method(sign->rsa, RSA_PKCS1_SSLeay());
+	//sign->rsa->e = BN_new();
+	//if(sign->rsa->e == NULL)
+	//	return 0;
 	
-	sign->rsa->e = BN_new();
-	if(sign->rsa->e == NULL)
-		return 0;
-	
-	BN_set_word(sign->rsa->e, 3);
+	//BN_set_word(sign->rsa->e, 3);
 	
 	return 1;
 }
@@ -61,12 +61,19 @@ int aos_signature_set_data(struct aos_signature *sign, const uint8_t *sig_data)
 int aos_signature_set_key(struct aos_signature *sign, const uint8_t *mpk_data)
 {
 	char data[AOS_SIGNATURE_LENGTH];
+	BIGNUM *n = NULL, *e = NULL;
 	
 	aos_bignum_reverse(mpk_data, data, AOS_SIGNATURE_LENGTH);
+
+	n = BN_bin2bn(data, AOS_SIGNATURE_LENGTH, NULL);
+	e = BN_new();
+	BN_set_word(e, 3);
 	
-	sign->rsa->n = BN_bin2bn(data, AOS_SIGNATURE_LENGTH, NULL);
-	if(sign->rsa->n == NULL)
-		return 0;
+	RSA_set0_key(sign->rsa, n, e, NULL);
+
+	//sign->rsa->n = BN_bin2bn(data, AOS_SIGNATURE_LENGTH, NULL);
+	//if(sign->rsa->n == NULL)
+	//	return 0;
 	
 	return 1;
 }
